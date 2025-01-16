@@ -45,6 +45,8 @@ class ToastManager {
       return AppLocalizations.of(context).notFoundSession;
     } else if (exception is NoNetworkError) {
       return AppLocalizations.of(context).youAreOffline;
+    } else if (exception is MustAuthenticateUsingEmail) {
+      return AppLocalizations.of(context).mustAuthenticateUsingEmail;
     } else {
       return null;
     }

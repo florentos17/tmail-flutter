@@ -4298,6 +4298,11 @@ class AppLocalizations {
     );
   }
 
+  String get mustAuthenticateUsingEmail {
+    return Intl.message('Must authenticate using email',
+      name: 'mustAuthenticateUsingEmail');
+  }
+
   String get findEmails {
     return Intl.message(
       'Find emails',

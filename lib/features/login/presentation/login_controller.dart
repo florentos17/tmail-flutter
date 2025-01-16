@@ -309,6 +309,8 @@ class LoginController extends ReloadableController {
       consumeState(Stream.value(Left(AuthenticationUserFailure(CanNotFoundBaseUrl()))));
     } else if (_username == null) {
       consumeState(Stream.value(Left(AuthenticationUserFailure(CanNotFoundUserName()))));
+    } else if (!_username!.value.isEmail) {
+      consumeState(Stream.value(Left(AuthenticationUserFailure(MustAuthenticateUsingEmail()))));
     } else if (_password == null) {
       consumeState(Stream.value(Left(AuthenticationUserFailure(CanNotFoundPassword()))));
     } else {

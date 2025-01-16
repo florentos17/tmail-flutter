@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' as io;
 import 'dart:typed_data';
 
+import 'package:collection/collection.dart';
 import 'package:core/core.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
@@ -15,10 +16,12 @@ import 'package:email_recovery/email_recovery/set/set_email_recovery_action_meth
 import 'package:email_recovery/email_recovery/set/set_email_recovery_action_response.dart';
 import 'package:external_path/external_path.dart';
 import 'package:flutter_downloader/flutter_downloader.dart';
+import 'package:html/parser.dart';
 import 'package:jmap_dart_client/http/http_client.dart';
 import 'package:jmap_dart_client/jmap/account_id.dart';
 import 'package:jmap_dart_client/jmap/core/capability/capability_identifier.dart';
 import 'package:jmap_dart_client/jmap/core/capability/core_capability.dart';
+import 'package:jmap_dart_client/jmap/core/extensions/date_time_extension.dart';
 import 'package:jmap_dart_client/jmap/core/id.dart';
 import 'package:jmap_dart_client/jmap/core/patch_object.dart';
 import 'package:jmap_dart_client/jmap/core/properties/properties.dart';
@@ -65,6 +68,7 @@ import 'package:mailer/mailer.dart' as mailer;
 import 'package:mailer/smtp_server.dart';
 import 'package:tmail_ui_user/features/base/isolate/background_isolate_binary_messenger/background_isolate_binary_messenger_mobile.dart';
 import 'package:tmail_ui_user/features/base/mixin/handle_error_mixin.dart';
+import 'package:tmail_ui_user/features/caching/clients/recent_login_username_cache_client.dart';
 import 'package:tmail_ui_user/features/composer/domain/exceptions/set_method_exception.dart';
 import 'package:tmail_ui_user/features/composer/domain/model/email_request.dart';
 import 'package:tmail_ui_user/features/email/data/network/import_email_method.dart';
@@ -76,6 +80,7 @@ import 'package:tmail_ui_user/features/email/domain/model/move_to_mailbox_reques
 import 'package:tmail_ui_user/features/email/domain/model/restore_deleted_message_request.dart';
 import 'package:tmail_ui_user/features/email/domain/state/download_attachment_for_web_state.dart';
 import 'package:tmail_ui_user/features/email/presentation/utils/email_utils.dart';
+import 'package:tmail_ui_user/features/login/data/model/recent_login_username_cache.dart';
 import 'package:tmail_ui_user/features/login/domain/exceptions/authentication_exception.dart';
 import 'package:tmail_ui_user/features/login/domain/repository/credential_repository.dart';
 import 'package:tmail_ui_user/features/mailbox/data/network/mailbox_api.dart';
@@ -92,9 +97,10 @@ class EmailAPI with HandleSetErrorMixin {
   final DownloadManager _downloadManager;
   final DioClient _dioClient;
   final Uuid _uuid;
+  final RecentLoginUsernameCacheClient _recentLoginUsernameCacheClient;
   final CredentialRepository credentialRepository;
 
-  EmailAPI(this._httpClient, this._downloadManager, this._dioClient, this._uuid, this.credentialRepository);
+  EmailAPI(this._httpClient, this._downloadManager, this._dioClient, this._uuid, this._recentLoginUsernameCacheClient, this.credentialRepository);
 
   Future<Email> getEmailContent(
     Session session,
@@ -172,6 +178,21 @@ class EmailAPI with HandleSetErrorMixin {
     return Tuple3(sendWithSMTP, null, null);
   }
 
+  Future<String> getCurrentUserEmail({int? limit, String? pattern}) {
+    return Future.sync(() async {
+      final recentLoginUsername = (await _recentLoginUsernameCacheClient.getAll())
+          .map((recentCache) => recentCache.toRecentLoginUsername())
+          .sorted((recentUsername1, recentUsername2) => recentUsername1.creationDate.compareToSort(recentUsername2.creationDate, false))
+          .toList();
+
+      if(recentLoginUsername.isNotEmpty) {
+        log('got current user email: ${recentLoginUsername.first.username}');
+        return recentLoginUsername.first.username;
+      } else {
+        throw Exception("Error: current user email is unknown. A new login is necessary.");
+      }});
+  }
+
   Future<void> sendEmail(
     Session session,
     AccountId accountId,
@@ -214,7 +235,8 @@ class EmailAPI with HandleSetErrorMixin {
       ignoreBadCertificate: true
     );
 
-    mailer.Message message = await EmailUtils.createMessage(emailRequest);
+    String currentUserEmail = await getCurrentUserEmail();
+    mailer.Message message = await EmailUtils.createMessage(emailRequest, currentUserEmail);
 
     try {
       await mailer.send(message, smtpServer);

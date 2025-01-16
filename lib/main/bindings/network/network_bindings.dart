@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:get/get.dart';
 import 'package:jmap_dart_client/http/http_client.dart';
+import 'package:tmail_ui_user/features/caching/clients/recent_login_username_cache_client.dart';
 import 'package:tmail_ui_user/features/email/data/local/html_analyzer.dart';
 import 'package:tmail_ui_user/features/email/data/network/email_api.dart';
 import 'package:tmail_ui_user/features/email/data/network/mdn_api.dart';
@@ -124,6 +125,7 @@ class NetworkBindings extends Bindings {
       Get.find<DownloadManager>(),
       Get.find<DioClient>(),
       Get.find<Uuid>(),
+      Get.find<RecentLoginUsernameCacheClient>(),
       Get.find<CredentialRepository>()
     ));
     Get.put(RuleFilterAPI(Get.find<HttpClient>()));

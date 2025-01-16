@@ -90,19 +90,18 @@ class EmailUtils {
     }
   }
 
-  static Future<mailer.Message> createMessage(EmailRequest emailRequest) async {
+  static Future<mailer.Message> createMessage(EmailRequest emailRequest, String currentUserEmail) async {
     final recipientsList = emailRequest.email
         .getRecipientEmailAddressList()
         .map((email) => mailer.Address(email))
         .toList();
 
-    final currentUserEmail = mailer.Address(emailRequest.email.from?.first.email ?? '', emailRequest.email.from?.first.name);
     final htmlPartId = emailRequest.email.htmlBody?.first?.partId;
     final htmlContent = htmlPartId != null ? (emailRequest.email.bodyValues?[htmlPartId]?.value) : null;
     final textContent = parse(htmlContent).body?.text ?? '';
 
     return mailer.Message()
-      ..from = currentUserEmail
+      ..from = mailer.Address(currentUserEmail, '')
       ..recipients.addAll(recipientsList)
       ..subject = emailRequest.email.subject ?? 'No Subject'
       ..text = textContent

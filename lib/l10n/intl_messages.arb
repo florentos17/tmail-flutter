@@ -1,5 +1,5 @@
 {
-  "@@last_modified": "2024-11-25T10:57:37.546143",
+  "@@last_modified": "2025-01-16T15:47:06.318873",
   "initializing_data": "Initializing data...",
   "@initializing_data": {
     "type": "text",
@@ -4090,6 +4090,12 @@
   },
   "youAreOffline": "You are offline. It looks like you are not connected.",
   "@youAreOffline": {
+    "type": "text",
+    "placeholders_order": [],
+    "placeholders": {}
+  },
+  "mustAuthenticateUsingEmail": "Must authenticate using email",
+  "@mustAuthenticateUsingEmail": {
     "type": "text",
     "placeholders_order": [],
     "placeholders": {}

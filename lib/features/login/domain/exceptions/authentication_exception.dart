@@ -5,6 +5,7 @@ abstract class AuthenticationException extends RemoteException {
   static const wrongCredential = 'Credential is wrong';
   static const badGateway = 'Bad gateway';
   static const invalidBaseUrl = 'Invalid base URL';
+  static const mustAuthenticateUsingEmail = 'Must authenticate using email';
 
   AuthenticationException(String message) : super(message: message);
 }
@@ -15,6 +16,10 @@ class BadCredentials extends AuthenticationException {
 
 class BadGateway extends AuthenticationException {
   BadGateway() : super(AuthenticationException.badGateway);
+}
+
+class MustAuthenticateUsingEmail extends AuthenticationException {
+  MustAuthenticateUsingEmail() : super(AuthenticationException.mustAuthenticateUsingEmail);
 }
 
 class NotFoundAuthenticatedAccountException implements Exception {}
