@@ -32,6 +32,20 @@ class AppUtils {
     );
   }
 
+  static Future<String> fetchValueFromEnvFile(String variable) async {
+    String envContent = await rootBundle.loadString(envFileName);
+    final Map<String, String> envVariables = {
+      for (var line in envContent.split('\n'))
+        line.split('=')[0].trim(): line.split('=')[1].trim()
+    };
+
+    final serverURL = envVariables[variable];
+    if (serverURL == null || serverURL.isEmpty) {
+      throw Exception("$variable not found in $envFileName");
+    }
+    return serverURL;
+  }
+
   static Future<bool> launchLink(String url, {bool isNewTab = true}) async {
     return await launchUrl(
       Uri.parse(url),

@@ -1362,6 +1362,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.0"
+  mailer:
+    dependency: "direct main"
+    description:
+      name: mailer
+      sha256: e907087cd00719898c493f720dd326af73b00b406ab4af8e79f15d7c5fc24035
+      url: "https://pub.dev"
+    source: hosted
+    version: "6.3.0"
   matcher:
     dependency: transitive
     description:

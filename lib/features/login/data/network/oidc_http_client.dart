@@ -1,9 +1,11 @@
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:core/data/model/query/query_parameter.dart';
 import 'package:core/data/network/dio_client.dart';
 import 'package:core/utils/app_logger.dart';
+import 'package:dio/io.dart';
 import 'package:model/oidc/oidc_configuration.dart';
 import 'package:model/oidc/request/oidc_request.dart';
 import 'package:model/oidc/response/oidc_discovery_response.dart';
@@ -13,13 +15,25 @@ import 'package:tmail_ui_user/features/login/data/network/config/oidc_constant.d
 import 'package:tmail_ui_user/features/login/data/network/endpoint.dart';
 import 'package:tmail_ui_user/features/login/data/network/oidc_error.dart';
 import 'package:tmail_ui_user/main/utils/app_config.dart';
-import 'package:dio/dio.dart' show DioError;
+import 'package:dio/dio.dart' show DioError, LogInterceptor;
 
 class OIDCHttpClient {
 
   final DioClient _dioClient;
 
-  OIDCHttpClient(this._dioClient);
+  OIDCHttpClient(this._dioClient) {
+    _acceptSelfSignedCertificates();
+  }
+
+  // Configure DioClient to accept self-signed certificates
+  void _acceptSelfSignedCertificates() {
+    (_dioClient.dio.httpClientAdapter as IOHttpClientAdapter).onHttpClientCreate = (HttpClient client) {
+      client.badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      return client;
+    };
+
+    _dioClient.dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+  }
 
   Future<OIDCResponse> checkOIDCIsAvailable(OIDCRequest oidcRequest) async {
     try {

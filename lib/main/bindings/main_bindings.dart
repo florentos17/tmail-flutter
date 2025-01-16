@@ -14,9 +14,10 @@ class MainBindings extends Bindings {
     await CoreBindings().dependencies();
     LocalBindings().dependencies();
     LocalIsolateBindings().dependencies();
-    NetworkBindings().dependencies();
-    NetworkIsolateBindings().dependencies();
+    NetworkBindings().dependencies1();
     CredentialBindings().dependencies();
+    NetworkBindings().dependencies2();
+    NetworkIsolateBindings().dependencies();
     SessionBindings().dependencies();
     NetWorkConnectionBindings().dependencies();
   }

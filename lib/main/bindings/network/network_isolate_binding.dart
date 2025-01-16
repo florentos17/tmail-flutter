@@ -13,6 +13,7 @@ import 'package:tmail_ui_user/features/login/data/network/authentication_client/
 import 'package:tmail_ui_user/features/login/data/network/interceptors/authorization_interceptors.dart';
 import 'package:tmail_ui_user/features/login/data/network/oidc_http_client.dart';
 import 'package:tmail_ui_user/features/login/data/utils/library_platform/app_auth_plugin/app_auth_plugin.dart';
+import 'package:tmail_ui_user/features/login/domain/repository/credential_repository.dart';
 import 'package:tmail_ui_user/features/mailbox/data/local/mailbox_cache_manager.dart';
 import 'package:tmail_ui_user/features/mailbox/data/local/state_cache_manager.dart';
 import 'package:tmail_ui_user/features/mailbox/data/network/mailbox_isolate_worker.dart';
@@ -82,7 +83,8 @@ class NetworkIsolateBindings extends Bindings {
       Get.find<HttpClient>(tag: BindingTag.isolateTag),
       Get.find<DownloadManager>(tag: BindingTag.isolateTag),
       Get.find<DioClient>(tag: BindingTag.isolateTag),
-      Get.find<Uuid>()
+      Get.find<Uuid>(),
+      Get.find<CredentialRepository>()
     ), tag: BindingTag.isolateTag);
   }
 

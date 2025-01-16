@@ -4,15 +4,20 @@ import 'package:core/presentation/state/success.dart';
 import 'package:core/utils/app_logger.dart';
 import 'package:core/utils/mail/mail_address.dart';
 import 'package:get/get_utils/src/get_utils/get_utils.dart';
+import 'package:html/parser.dart';
+import 'package:mailer/mailer.dart' as mailer;
 import 'package:dartz/dartz.dart';
 import 'package:jmap_dart_client/jmap/account_id.dart';
 import 'package:jmap_dart_client/jmap/core/capability/capability_identifier.dart';
 import 'package:jmap_dart_client/jmap/core/properties/properties.dart';
 import 'package:jmap_dart_client/jmap/core/session/session.dart';
+import 'package:model/extensions/email_extension.dart';
 import 'package:tmail_ui_user/features/email/domain/state/download_attachment_for_web_state.dart';
 import 'package:tmail_ui_user/features/email/presentation/model/email_unsubscribe.dart';
 import 'package:tmail_ui_user/features/thread/domain/constants/thread_constants.dart';
 import 'package:tmail_ui_user/main/error/capability_validator.dart';
+
+import '../../../composer/domain/model/email_request.dart';
 
 class EmailUtils {
 
@@ -83,5 +88,82 @@ class EmailUtils {
       logError('EmailUtils::isEmailAddressValid: Exception = $e');
       return false;
     }
+  }
+
+  static Future<mailer.Message> createMessage(EmailRequest emailRequest) async {
+    final recipientsList = emailRequest.email
+        .getRecipientEmailAddressList()
+        .map((email) => mailer.Address(email))
+        .toList();
+
+    final currentUserEmail = mailer.Address(emailRequest.email.from?.first.email ?? '', emailRequest.email.from?.first.name);
+    final htmlPartId = emailRequest.email.htmlBody?.first?.partId;
+    final htmlContent = htmlPartId != null ? (emailRequest.email.bodyValues?[htmlPartId]?.value) : null;
+    final textContent = parse(htmlContent).body?.text ?? '';
+
+    return mailer.Message()
+      ..from = currentUserEmail
+      ..recipients.addAll(recipientsList)
+      ..subject = emailRequest.email.subject ?? 'No Subject'
+      ..text = textContent
+      ..html = htmlContent;
+  }
+
+  static String MessageAsString(mailer.Message message) {
+    final buffer = StringBuffer();
+
+    void writeWithCRLF(String line) {
+      buffer.write(line.replaceAll('\n', '\r\n'));
+      if (!line.endsWith('\r\n')) {
+        buffer.write('\r\n');
+      }
+    }
+
+    if (message.from != null) {
+      writeWithCRLF('From: ${message.from}');
+    }
+
+    final recipientAddresses = message.recipients.join(', ');
+    if (recipientAddresses.isNotEmpty) {
+      writeWithCRLF('To: $recipientAddresses');
+    }
+
+    final ccAddresses = message.ccRecipients.join(', ');
+    if (ccAddresses.isNotEmpty) {
+      writeWithCRLF('Cc: $ccAddresses');
+    }
+
+    final bccAddresses = message.bccRecipients.join(', ');
+    if (bccAddresses.isNotEmpty) {
+      writeWithCRLF('Bcc: $bccAddresses');
+    }
+
+    if (message.subject != null) {
+      writeWithCRLF('Subject: ${message.subject}');
+    }
+
+    writeWithCRLF('Date: ${DateTime.now().toUtc().toIso8601String()}');
+
+    if (message.html != null) {
+      writeWithCRLF('Content-Type: text/html; charset="utf-8"');
+    } else if (message.text != null) {
+      writeWithCRLF('Content-Type: text/plain; charset="utf-8"');
+    } else {
+      writeWithCRLF('Content-Type: application/octet-stream');
+    }
+
+    // Add a blank line between headers and body
+    buffer.write('\r\n');
+
+    // Add email body
+    if (message.text != null) {
+      writeWithCRLF(message.text!);
+    } else if (message.html != null) {
+      writeWithCRLF(message.html!);
+    }
+
+    // Add attachments
+
+    return buffer.toString();
   }
 }

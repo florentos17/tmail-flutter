@@ -23,6 +23,7 @@ import 'package:tmail_ui_user/features/login/data/network/dns_service.dart';
 import 'package:tmail_ui_user/features/login/data/network/interceptors/authorization_interceptors.dart';
 import 'package:tmail_ui_user/features/login/data/network/oidc_http_client.dart';
 import 'package:tmail_ui_user/features/login/data/utils/library_platform/app_auth_plugin/app_auth_plugin.dart';
+import 'package:tmail_ui_user/features/login/domain/repository/credential_repository.dart';
 import 'package:tmail_ui_user/features/mailbox/data/local/mailbox_cache_manager.dart';
 import 'package:tmail_ui_user/features/mailbox/data/local/state_cache_manager.dart';
 import 'package:tmail_ui_user/features/mailbox/data/network/mailbox_api.dart';
@@ -46,10 +47,19 @@ class NetworkBindings extends Bindings {
 
   @override
   void dependencies() {
+    dependencies1();
+    dependencies2();
+  }
+
+  void dependencies1() {
     _bindingConnection();
     _bindingBaseOption();
     _bindingDio();
     _bindingSharing();
+    _bindingException();
+  }
+
+  void dependencies2() {
     _bindingInterceptors();
     _bindingApi();
     _bindingTransformer();
@@ -114,6 +124,7 @@ class NetworkBindings extends Bindings {
       Get.find<DownloadManager>(),
       Get.find<DioClient>(),
       Get.find<Uuid>(),
+      Get.find<CredentialRepository>()
     ));
     Get.put(RuleFilterAPI(Get.find<HttpClient>()));
     Get.put(VacationAPI(Get.find<HttpClient>()));

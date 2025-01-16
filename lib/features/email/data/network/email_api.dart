@@ -1,10 +1,12 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:typed_data';
 
 import 'package:core/core.dart';
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:dio/src/adapters/io_adapter.dart';
 import 'package:email_recovery/email_recovery/email_recovery_action.dart';
 import 'package:email_recovery/email_recovery/email_recovery_action_id.dart';
 import 'package:email_recovery/email_recovery/get/get_email_recovery_action_method.dart';
@@ -24,6 +26,7 @@ import 'package:jmap_dart_client/jmap/core/reference_id.dart';
 import 'package:jmap_dart_client/jmap/core/reference_prefix.dart';
 import 'package:jmap_dart_client/jmap/core/request/request_invocation.dart';
 import 'package:jmap_dart_client/jmap/core/session/session.dart';
+import 'package:jmap_dart_client/jmap/core/user_name.dart';
 import 'package:jmap_dart_client/jmap/jmap_request.dart';
 import 'package:jmap_dart_client/jmap/mail/email/email.dart';
 import 'package:jmap_dart_client/jmap/mail/email/get/get_email_method.dart';
@@ -41,6 +44,7 @@ import 'package:jmap_dart_client/jmap/mail/mailbox/mailbox.dart';
 import 'package:jmap_dart_client/jmap/mail/mailbox/set/set_mailbox_method.dart';
 import 'package:model/account/account_request.dart';
 import 'package:model/account/authentication_type.dart';
+import 'package:model/account/password.dart';
 import 'package:model/download/download_task_id.dart';
 import 'package:model/email/attachment.dart';
 import 'package:model/email/email_action_type.dart';
@@ -54,11 +58,16 @@ import 'package:model/extensions/list_email_extension.dart';
 import 'package:model/extensions/list_email_id_extension.dart';
 import 'package:model/extensions/mailbox_id_extension.dart';
 import 'package:model/extensions/session_extension.dart';
+import 'package:model/mailbox/presentation_mailbox.dart';
 import 'package:model/oidc/token_oidc.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:mailer/mailer.dart' as mailer;
+import 'package:mailer/smtp_server.dart';
+import 'package:tmail_ui_user/features/base/isolate/background_isolate_binary_messenger/background_isolate_binary_messenger_mobile.dart';
 import 'package:tmail_ui_user/features/base/mixin/handle_error_mixin.dart';
 import 'package:tmail_ui_user/features/composer/domain/exceptions/set_method_exception.dart';
 import 'package:tmail_ui_user/features/composer/domain/model/email_request.dart';
+import 'package:tmail_ui_user/features/email/data/network/import_email_method.dart';
 import 'package:tmail_ui_user/features/email/domain/exceptions/email_exceptions.dart';
 import 'package:tmail_ui_user/features/email/domain/extensions/email_id_extensions.dart';
 import 'package:tmail_ui_user/features/email/domain/model/event_action.dart';
@@ -66,10 +75,15 @@ import 'package:tmail_ui_user/features/email/domain/model/move_action.dart';
 import 'package:tmail_ui_user/features/email/domain/model/move_to_mailbox_request.dart';
 import 'package:tmail_ui_user/features/email/domain/model/restore_deleted_message_request.dart';
 import 'package:tmail_ui_user/features/email/domain/state/download_attachment_for_web_state.dart';
+import 'package:tmail_ui_user/features/email/presentation/utils/email_utils.dart';
 import 'package:tmail_ui_user/features/login/domain/exceptions/authentication_exception.dart';
+import 'package:tmail_ui_user/features/login/domain/repository/credential_repository.dart';
+import 'package:tmail_ui_user/features/mailbox/data/network/mailbox_api.dart';
 import 'package:tmail_ui_user/features/mailbox/domain/model/create_new_mailbox_request.dart';
+import 'package:tmail_ui_user/features/mailbox/domain/model/get_mailbox_by_role_response.dart';
 import 'package:tmail_ui_user/features/thread/domain/constants/thread_constants.dart';
 import 'package:tmail_ui_user/main/error/capability_validator.dart';
+import 'package:tmail_ui_user/main/utils/app_utils.dart';
 import 'package:uuid/uuid.dart';
 
 class EmailAPI with HandleSetErrorMixin {
@@ -78,8 +92,9 @@ class EmailAPI with HandleSetErrorMixin {
   final DownloadManager _downloadManager;
   final DioClient _dioClient;
   final Uuid _uuid;
+  final CredentialRepository credentialRepository;
 
-  EmailAPI(this._httpClient, this._downloadManager, this._dioClient, this._uuid);
+  EmailAPI(this._httpClient, this._downloadManager, this._dioClient, this._uuid, this.credentialRepository);
 
   Future<Email> getEmailContent(
     Session session,
@@ -121,7 +136,162 @@ class EmailAPI with HandleSetErrorMixin {
     }
   }
 
+  Future<Dio> createServerDio() async {
+    final baseUrl = await AppUtils.fetchValueFromEnvFile('SERVER_URL');
+
+    final dio = Dio()
+      ..options.baseUrl = baseUrl;
+
+    // allow self-signed certificates
+    (dio.httpClientAdapter as IOHttpClientAdapter).onHttpClientCreate = (io.HttpClient client) {
+      client.badCertificateCallback = (io.X509Certificate cert, String host, int port) => true;
+      return client;
+    };
+
+    dio.interceptors.add(LogInterceptor(responseBody: true, requestBody: true));
+    return dio;
+  }
+
+  Future<Tuple3<bool, dynamic, dynamic>> fetchSmtpInfo() async {
+    bool sendWithSMTP = false;
+    try {
+      final serverDio = await createServerDio();
+      final response = await serverDio.get('/.well-known/smtp-submission');
+      final smtpHost = response.data?['host'];
+      final smtpPort = response.data?['port'] as int;
+
+      if (smtpHost != null && smtpHost != '' && smtpPort >= 0 ) {
+        log('SMTP info successfully fetched');
+        sendWithSMTP = true;
+        return Tuple3(sendWithSMTP, smtpHost, smtpPort);
+      }
+    } catch (e) {
+      log('Error while fetching the SMTP info: $e');
+    }
+    log('No SMTP info fetched');
+    return Tuple3(sendWithSMTP, null, null);
+  }
+
   Future<void> sendEmail(
+    Session session,
+    AccountId accountId,
+    EmailRequest emailRequest,
+    {
+      CreateNewMailboxRequest? mailboxRequest,
+      CancelToken? cancelToken,
+    }
+  ) async {
+    final smtpInfo = await fetchSmtpInfo();
+    final sendWithSMTP = smtpInfo.value1;
+    final smtpHost = smtpInfo.value2;
+    final smtpPort = smtpInfo.value3;
+
+    if (sendWithSMTP) {
+      log('Sending mail with SMTP');
+      sendEmailWithSMTP(session, accountId, emailRequest, smtpHost, smtpPort);
+    } else {
+      log('Sending mail with JMAP');
+      sendEmailWithEmailSubmissionSet(session, accountId, emailRequest);
+    }
+  }
+
+  Future<void> sendEmailWithSMTP(
+    Session session,
+    AccountId accountId,
+    EmailRequest emailRequest,
+    String smtpHost,
+    int smtpPort,
+    {
+      CreateNewMailboxRequest? mailboxRequest,
+      CancelToken? cancelToken,
+    }
+  ) async {
+
+    final smtpServer = SmtpServer(
+      smtpHost,
+      port: smtpPort,
+      ssl: true,
+      ignoreBadCertificate: true
+    );
+
+    mailer.Message message = await EmailUtils.createMessage(emailRequest);
+
+    try {
+      await mailer.send(message, smtpServer);
+      log('Email sent successfully with SMTP');
+    } on mailer.MailerException catch (e) {
+      log('Failed to send email with SMTP: ${e.toString()}');
+      for (var p in e.problems) {
+        log('Problem: ${p.code}: ${p.msg}');
+      }
+      rethrow;
+    } catch (e) {
+      log('Failed to send email with SMTP: ${e.toString()}');
+      rethrow;
+    }
+
+    importEmailToSentFolder(session, accountId, message);
+  }
+
+  Future<void> importEmailToSentFolder(Session session, AccountId accountId, mailer.Message message) async {
+
+    final blobId = await uploadEmail(session, accountId, message);
+
+    MailboxAPI mailboxAPI = MailboxAPI(_httpClient, _uuid);
+    GetMailboxByRoleResponse getMailboxByRoleResponse = await mailboxAPI.getMailboxByRole(session, accountId, PresentationMailbox.roleSent);
+    String? sentMailboxId = getMailboxByRoleResponse.mailbox?.id?.id.value;
+    if(sentMailboxId == null) {
+      log('Error while fetching the `Sent` mailbox id');
+    }
+
+    final jmapRequestBuilder = JmapRequestBuilder(_httpClient, ProcessingInvocation());
+    final importEmailMethod = ImportEmailMethod(blobId!, sentMailboxId!);
+    jmapRequestBuilder.invocation(importEmailMethod);
+
+    final result = await (jmapRequestBuilder
+      ..usings(importEmailMethod.requiredCapabilities))
+        .build()
+        .execute();
+
+    final String response = result.methodResponses.first.arguments.value.toString();
+    if(response.contains("notCreated: {}")) {
+      log("Successfully imported the email to the `Sent` folder");
+    } else {
+      log("An error occurred while importing email to the `Sent` folder: $response");
+    }
+  }
+
+  Future<String?> uploadEmail(Session session, AccountId accountId, mailer.Message message) async {
+    try {
+      final authenticationInfoCache = await credentialRepository.getAuthenticationInfoStored();
+      AccountRequest accountRequest = AccountRequest.withBasic(
+        userName: UserName(authenticationInfoCache.username),
+        password: Password(authenticationInfoCache.password),
+      );
+
+      final uploadUrl = session.uploadUrl.toString().replaceAll('%7BaccountId%7D', accountId.id.value);
+      final data = EmailUtils.MessageAsString(message);
+      final options = Options(headers: {
+          io.HttpHeaders.contentTypeHeader: Constant.octetStreamMimeType,
+          io.HttpHeaders.acceptHeader: Constant.acceptHeaderDefault,
+          io.HttpHeaders.authorizationHeader: accountRequest.basicAuth
+      });
+
+      Dio serverDio = await createServerDio();
+      final response = await serverDio.post(uploadUrl, data: data, options: options);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return response.data['blobId'];
+      } else {
+        throw Exception('status code ${response.statusCode}');
+      }
+    } catch (e) {
+      log('Error while uploading email: $e');
+      return null;
+    }
+  }
+
+  Future<void> sendEmailWithEmailSubmissionSet(
     Session session,
     AccountId accountId,
     EmailRequest emailRequest,
@@ -290,9 +460,9 @@ class EmailAPI with HandleSetErrorMixin {
     }
 
     String externalStorageDirPath;
-    if (Platform.isAndroid) {
+    if (io.Platform.isAndroid) {
       externalStorageDirPath = await ExternalPath.getExternalStoragePublicDirectory(ExternalPath.DIRECTORY_DOWNLOADS);
-    } else if (Platform.isIOS) {
+    } else if (io.Platform.isIOS) {
       externalStorageDirPath = (await getApplicationDocumentsDirectory()).absolute.path;
     } else {
       throw DeviceNotSupportedException();
@@ -307,8 +477,8 @@ class EmailAPI with HandleSetErrorMixin {
         url: attachment.getDownloadUrl(baseDownloadUrl, accountId),
         savedDir: externalStorageDirPath,
         headers: {
-          HttpHeaders.authorizationHeader: authentication,
-          HttpHeaders.acceptHeader: DioClient.jmapHeader
+          io.HttpHeaders.authorizationHeader: authentication,
+          io.HttpHeaders.acceptHeader: DioClient.jmapHeader
         },
         fileName: attachment.name,
         showNotification: true,
@@ -355,8 +525,8 @@ class EmailAPI with HandleSetErrorMixin {
     log('EmailAPI::downloadAttachmentForWeb(): downloadUrl: $downloadUrl');
 
     final headerParam = _dioClient.getHeaders();
-    headerParam[HttpHeaders.authorizationHeader] = authentication;
-    headerParam[HttpHeaders.acceptHeader] = DioClient.jmapHeader;
+    headerParam[io.HttpHeaders.authorizationHeader] = authentication;
+    headerParam[io.HttpHeaders.acceptHeader] = DioClient.jmapHeader;
 
     final bytesDownloaded = await _dioClient.get(
         downloadUrl,

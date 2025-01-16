@@ -12,6 +12,8 @@ class DioClient {
 
   Map<String, dynamic> getHeaders() => Map.from(_dio.options.headers);
 
+  Dio get dio => _dio;
+
   Future<dynamic> get(
     String path, {
     Map<String, dynamic>? queryParameters,
