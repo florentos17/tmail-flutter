@@ -10,6 +10,8 @@ class DioClient {
 
   DioClient(this._dio);
 
+  Dio get dio => _dio;
+
   Map<String, dynamic> getHeaders() => Map.from(_dio.options.headers);
 
   Future<dynamic> get(
