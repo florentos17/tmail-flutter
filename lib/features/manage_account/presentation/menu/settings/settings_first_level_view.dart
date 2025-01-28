@@ -30,18 +30,6 @@ class SettingsFirstLevelView extends GetWidget<SettingsController> {
           indent: SettingsUtils.getHorizontalPadding(context, controller.responsiveUtils),
           endIndent: SettingsUtils.getHorizontalPadding(context, controller.responsiveUtils)
         ),
-        SettingFirstLevelTileBuilder(
-          AppLocalizations.of(context).profiles,
-          AccountMenuItem.profiles.getIcon(controller.imagePaths),
-          subtitle: AppLocalizations.of(context).profilesSettingExplanation,
-          () => controller.selectSettings(AccountMenuItem.profiles)
-        ),
-        Divider(
-          color: AppColor.colorDividerHorizontal,
-          height: 1,
-          indent: SettingsUtils.getHorizontalPadding(context, controller.responsiveUtils),
-          endIndent: SettingsUtils.getHorizontalPadding(context, controller.responsiveUtils)
-        ),
         Obx(() {
           if (controller.manageAccountDashboardController.isRuleFilterCapabilitySupported) {
             return Column(children: [
